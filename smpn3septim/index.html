@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TUNTAS · SMP Negeri 3 Sepatan Timur</title>
+<link rel="icon" type="image/svg+xml" href="/tuntas/ikon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/tuntas/ikon-32.png">
+<link rel="apple-touch-icon" href="/tuntas/ikon-192.png">
+<meta name="description" content="TUNTAS - Rapor Peserta Didik SMP Negeri 3 Sepatan Timur">
+<meta name="author" content="Riki Arifin, S.Psi">
+<meta name="theme-color" content="#F6F8FC">
+<style>
+  html,body{margin:0;height:100%;font-family:Arial,Helvetica,sans-serif;background:#F6F8FC;color:#0F172A}
+  #muat{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;box-sizing:border-box}
+  #logo{width:88px;height:88px;animation:muncul .6s ease-out}
+  @keyframes muncul{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
+  .putar{width:34px;height:34px;border:4px solid rgba(29,78,216,.25);border-top-color:#1D4ED8;border-radius:50%;animation:p .9s linear infinite}
+  @keyframes p{to{transform:rotate(360deg)}}
+  h1{margin:0;font-size:28px;letter-spacing:2px}
+  p{margin:0;color:#475569;font-size:14px}
+  .gagal{display:none;max-width:380px}
+  .gagal a,.gagal button{display:inline-block;margin:6px;padding:10px 16px;border-radius:10px;border:0;font-size:14px;font-weight:bold;cursor:pointer;text-decoration:none}
+  .gagal button{background:#1D4ED8;color:#fff}.gagal a{background:#E2E8F0;color:#0F172A}
+  .kaki{font-size:11px;color:#64748b}
+</style>
+</head>
+<body>
+<!-- Tanpa layar "memuat": latar sama dengan halaman login TUNTAS, lalu langsung diganti tampilan aplikasi.
+     Logo & pesan hanya muncul bila aplikasi gagal dimuat. -->
+<div id="muat">
+  <div class="gagal" id="gagal">
+    <img id="logo" alt="Logo TUNTAS" src="/tuntas/ikon.svg">
+    <h1>TUNTAS</h1>
+    <p>Aplikasi belum bisa dimuat. Periksa koneksi internet lalu coba lagi.</p>
+    <button type="button" onclick="location.reload()">Coba lagi</button>
+    <a id="alt" href="#">Buka cara lama</a>
+    <p class="kaki">By Riki Arifin, S.Psi</p>
+  </div>
+</div>
+<script>
+/* Halaman pembuka TUNTAS. File ini TIDAK perlu diubah setiap kali aplikasi diperbarui:
+   tampilan selalu diambil dari Apps Script versi terbaru (?mode=html), dan semua perintah ke server
+   dikirim lewat doPost TANPA akun Google - jadi Chrome yang login banyak akun tetap bisa membuka. */
+var TUNTAS_API = 'https://script.google.com/macros/s/AKfycbyNrDt0aGb4qrHjpHEYsb-a0ZX9JyK-kJIqL5NVGWBAZL7C2SdUBch_D0F5w3c-TMB_/exec';
+document.getElementById('alt').href = TUNTAS_API;
+var IKON_HTML = '<link rel="icon" type="image/svg+xml" href="/tuntas/ikon.svg"><link rel="icon" type="image/png" sizes="32x32" href="/tuntas/ikon-32.png"><link rel="apple-touch-icon" href="/tuntas/ikon-192.png">';
+
+// Logo TUNTAS di tab browser: setelah tampilan aplikasi dipasang, ikon tab dipasang ulang
+// agar browser memperbaruinya (ikon bawaan halaman sebelumnya kadang tertinggal).
+function ikonTuntas() {
+  var ganti = function () {
+    var h = document.head; if (!h) return;
+    [].slice.call(document.querySelectorAll('link[rel~="icon"],link[rel="apple-touch-icon"]')).forEach(function (l) { l.parentNode.removeChild(l); });
+    [['icon', 'image/svg+xml', '/tuntas/ikon.svg', ''], ['icon', 'image/png', '/tuntas/ikon-32.png', '32x32'], ['apple-touch-icon', 'image/png', '/tuntas/ikon-192.png', '192x192']].forEach(function (x) {
+      var l = document.createElement('link'); l.rel = x[0]; l.type = x[1]; l.href = x[2] + '?v=2'; if (x[3]) l.sizes = x[3]; h.appendChild(l);
+    });
+  };
+  document.addEventListener('DOMContentLoaded', ganti);
+  window.addEventListener('load', function () { setTimeout(ganti, 300); });
+}
+
+function tuntasShim() {
+  // Pengganti google.script.run: rantai withSuccessHandler/withFailureHandler/withUserObject lalu
+  // nama fungsi server -> dikirim sebagai {fn, args} ke doPost, hasilnya diteruskan ke handler.
+  function kirim(nama, args, st) {
+    fetch(window.TUNTAS_API, {
+      method: 'POST', credentials: 'omit',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ fn: nama, args: args })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('Server sedang sibuk (' + r.status + '). Coba lagi sebentar.');
+      return r.json();
+    }).then(function (res) {
+      if (res && res.ok) { if (st.ok) st.ok(res.result, st.uo); }
+      else { var e = new Error((res && res.error) || 'Permintaan gagal.'); if (st.gagal) st.gagal(e, st.uo); else console.error(e); }
+    }).catch(function (err) {
+      var e = err instanceof Error ? err : new Error(String(err));
+      if (/Failed to fetch|NetworkError|Load failed/i.test(e.message)) e = new Error('Gagal menghubungi server. Periksa koneksi internet Anda.');
+      if (st.gagal) st.gagal(e, st.uo); else console.error(e);
+    });
+  }
+  function runner(st) {
+    return new Proxy({}, {
+      get: function (_, nama) {
+        if (nama === 'withSuccessHandler') return function (f) { return runner(Object.assign({}, st, { ok: f })); };
+        if (nama === 'withFailureHandler') return function (f) { return runner(Object.assign({}, st, { gagal: f })); };
+        if (nama === 'withUserObject') return function (o) { return runner(Object.assign({}, st, { uo: o })); };
+        if (typeof nama !== 'string' || nama === 'then') return undefined;
+        return function () { kirim(nama, Array.prototype.slice.call(arguments), st); };
+      }
+    });
+  }
+  window.google = window.google || {};
+  window.google.script = {
+    run: runner({}),
+    host: { close: function () {}, setHeight: function () {}, setWidth: function () {}, editor: {} },
+    url: { getLocation: function (cb) { cb({ hash: location.hash.slice(1), parameter: {}, parameters: {} }); } }
+  };
+  window.__tuntasLewatPembuka = true;
+}
+
+function gagalMuat(err) {
+  document.getElementById('gagal').style.display = 'block';
+  if (window.console) console.error(err);
+}
+
+// Tampilan aplikasi disimpan di perangkat (Cache browser). Kunjungan berikutnya langsung tampil dari
+// simpanan, sementara versi terbaru diambil diam-diam dan dipakai pada kunjungan selanjutnya.
+var CACHE_NAMA = 'tuntas-tampilan', CACHE_URL = location.origin + '/__tuntas/smpn3septim.html';
+function ambilTampilanBaru() {
+  return fetch(TUNTAS_API + '?mode=html&t=' + Date.now(), { credentials: 'omit', cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(function (html) { if (html.indexOf('<html') === -1) throw new Error('Isi tidak dikenal'); return html; });
+}
+function simpanTampilan(html) {
+  try {
+    if (!window.caches) return Promise.resolve();
+    return caches.open(CACHE_NAMA).then(function (c) {
+      return c.put(CACHE_URL, new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } }));
+    }).catch(function () {});
+  } catch (e) { return Promise.resolve(); }
+}
+function bacaTampilan() {
+  try {
+    if (!window.caches) return Promise.resolve(null);
+    return caches.open(CACHE_NAMA).then(function (c) { return c.match(CACHE_URL); })
+      .then(function (r) { return r ? r.text() : null; }).catch(function () { return null; });
+  } catch (e) { return Promise.resolve(null); }
+}
+// Dijalankan DI DALAM halaman aplikasi (setelah tampil dari simpanan): ambil versi terbaru di latar.
+function segarkanLatar(api, nama, url) {
+  setTimeout(function () {
+    fetch(api + '?mode=html&t=' + Date.now(), { credentials: 'omit', cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function (html) {
+        if (html.indexOf('<html') === -1 || !window.caches) return;
+        return caches.open(nama).then(function (c) {
+          return c.put(url, new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } }));
+        });
+      }).catch(function () {});
+  }, 4000);
+}
+function tampilkan(html, dariSimpanan) {
+  var shim = IKON_HTML + '<script>window.TUNTAS_API=' + JSON.stringify(TUNTAS_API) + ';(' + tuntasShim.toString() + ')();(' + ikonTuntas.toString() + ')();';
+  if (dariSimpanan) shim += '(' + segarkanLatar.toString() + ')(' + JSON.stringify(TUNTAS_API) + ',' + JSON.stringify(CACHE_NAMA) + ',' + JSON.stringify(CACHE_URL) + ');';
+  shim += '<\/script>';
+  html = html.replace(/<head[^>]*>/i, function (m) { return m + shim; });
+  document.open();
+  document.write(html);
+  document.close();
+}
+bacaTampilan().then(function (lama) {
+  if (lama && lama.indexOf('<html') !== -1) tampilkan(lama, true);
+  else ambilTampilanBaru().then(function (html) {
+    return simpanTampilan(html).then(function () { tampilkan(html, false); });
+  }).catch(gagalMuat);
+});
+</script>
+</body>
+</html>
